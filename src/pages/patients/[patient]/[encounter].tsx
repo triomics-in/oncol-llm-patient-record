@@ -14,6 +14,7 @@ import { faker } from "@faker-js/faker";
 import { Badge } from "@/components/ui/badge";
 import {
   calculateAge,
+  cn,
   formatCustomDate,
   formatDateWithSlash,
 } from "@/lib/utils";
@@ -29,6 +30,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Dot } from "lucide-react";
 
 type iPatient = {
   // Set the type for the patient object from the server
@@ -41,9 +43,33 @@ type iPatient = {
   address: string;
 };
 
-export default function Encounter({ patient }: { patient: iPatient }) {
-  const router = useRouter();
+const diagnoses = [
+  {
+    name: "Hypertension",
+    description: "High blood pressure",
+    severiety: "High",
+    extractedFrom: "CBC Report",
+    date: "June 13th, 2021",
+  },
+  {
+    name: "Type 2 Diabetes Mellitus",
+    description:
+      "Chronic condition characterized by elevated blood sugar levels.",
+    severiety: "Moderate",
+    extractedFrom: "CBC Report",
+    date: "March 13th, 2021",
+  },
+  {
+    name: "Major Depressive Disorder",
+    description:
+      "A mental health disorder characterized by persistently depressed mood or loss of interest in activities, causing significant impairment in daily life.",
+    severiety: "Mild",
+    extractedFrom: "CBC Report",
+    date: "December 18th, 2021",
+  },
+];
 
+export default function Encounter({ patient }: { patient: iPatient }) {
   return (
     <div>
       <Card className="w-[95%] mx-auto my-7">
@@ -73,7 +99,7 @@ export default function Encounter({ patient }: { patient: iPatient }) {
           </div>
         </CardContent>
       </Card>
-      <Tabs defaultValue="ordersNotes" className="w-[95%] mx-auto">
+      <Tabs defaultValue="diagnosis" className="w-[95%] mx-auto">
         <TabsList className="w-full flex items-center justify-start px-1">
           <TabsTrigger value="diagnosis">Diagnosis</TabsTrigger>
           <TabsTrigger value="procedures">Procedures</TabsTrigger>
@@ -87,7 +113,35 @@ export default function Encounter({ patient }: { patient: iPatient }) {
                 <Title title={"Diagnosis"} />
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2"></CardContent>
+            <CardContent className="space-y-2">
+              <Table>
+                <TableHeader>
+                  <TableRow className="uppercase font-semibold text-left">
+                    <TableHead>Diagnosis Name</TableHead>
+                    <TableHead className="w-[315px]">Description</TableHead>
+                    <TableHead>Severeity</TableHead>
+                    <TableHead>Extracted From</TableHead>
+                    <TableHead>Date of Diagnosis</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {diagnoses.map((diagnosis) => (
+                    <TableRow key={diagnosis.name}>
+                      <TableCell>{diagnosis.name}</TableCell>
+                      <TableCell className="truncate max-w-[315px]">
+                        {diagnosis.description}
+                      </TableCell>
+                      <TableCell>
+                        <Severity severity={diagnosis.severiety as any} />
+                      </TableCell>
+                      <TableCell>{diagnosis.extractedFrom}</TableCell>
+                      <TableCell>{diagnosis.date}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <ShowMore />
+            </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="procedures">
@@ -108,8 +162,14 @@ export default function Encounter({ patient }: { patient: iPatient }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <OrderNote />
-              <OrderNote />
+              <OrderNote title="Discharge Summary" date="June 13th, 2021" />
+              <OrderNote title="Radiology Report" date="January 18th, 2023" />
+              <OrderNote
+                title="Electrocardiograph(ECG)"
+                date="December 18th, 2022"
+              />
+              <OrderNote title="Physician Note" date="May 18th, 2022" />
+              <ShowMore />
             </CardContent>
           </Card>
         </TabsContent>
@@ -143,6 +203,44 @@ const Block = ({
   </div>
 );
 
+const ShowMore = () => {
+  return (
+    <span className="text-blue-600 text-sm cursor-pointer block p-4 pb-0">
+      View All
+    </span>
+  );
+};
+
+const Severity = ({ severity }: { severity: "High" | "Moderate" | "Mild" }) => {
+  const bgColors = {
+    High: "bg-red-50",
+    Moderate: "bg-yellow-50",
+    Mild: "bg-blue-50",
+  };
+
+  const colors = {
+    High: "text-red-500",
+    Moderate: "text-yellow-500",
+    Mild: "text-blue-500",
+  };
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "text-xs font-semibold uppercase relative pl-5",
+        bgColors[severity],
+        colors[severity]
+      )}
+    >
+      <Dot
+        className="inline-block absolute -left-3 top-1/2 transform -translate-y-1/2"
+        size={35}
+      />
+      {severity}
+    </Badge>
+  );
+};
+
 const Title = ({ title }: { title: string }) => (
   <div className="relative">
     <span className="block font-semibold uppercase text-base text-blue-800">
@@ -152,11 +250,13 @@ const Title = ({ title }: { title: string }) => (
   </div>
 );
 
-const OrderNote = () => {
+const OrderNote = ({ title, date }: { title: string; date: string }) => {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline">Open</Button>
+        <div className="text-sm cursor-pointer border-b p-4">
+          <span className="text-blue-700 underline">{title}</span>, {date}
+        </div>
       </SheetTrigger>
       <SheetContent className="min-w-[500px]">
         <SheetHeader className="relative -top-3">
@@ -172,7 +272,7 @@ const OrderNote = () => {
 
 export const getServerSideProps = async () => {
   let patient: iPatient = {
-    id: faker.random.numeric(5),
+    id: faker.string.numeric(5),
     name: faker.person.fullName(),
     dob: faker.date.birthdate().toString(),
     sex: faker.person.sex(),
@@ -180,7 +280,7 @@ export const getServerSideProps = async () => {
       provider: "gmail",
       allowSpecialCharacters: false,
     }),
-    phone: faker.phone.number("(+###) ###-####"),
+    phone: faker.string.numeric(10),
     address: faker.location.streetAddress(),
   };
   return {

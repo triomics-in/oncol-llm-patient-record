@@ -141,7 +141,7 @@ const Block = ({
 
 export const getServerSideProps = async () => {
   let patient: iPatient = {
-    id: faker.random.numeric(5),
+    id: faker.string.numeric(5),
     name: faker.person.fullName(),
     dob: faker.date.birthdate().toString(),
     sex: faker.person.sex(),
@@ -155,7 +155,7 @@ export const getServerSideProps = async () => {
   };
   for (let i = 0; i < 7; i++) {
     patient.enounters.push({
-      encounterId: faker.random.numeric(5),
+      encounterId: faker.string.numeric(5),
       encounterDate: faker.date.past().toString(),
       encounterName: faker.lorem.words({
         min: 2,
