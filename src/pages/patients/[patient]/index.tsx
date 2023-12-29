@@ -3,9 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -17,6 +15,7 @@ import {
   formatCustomDate,
   formatDateWithSlash,
 } from "@/lib/utils";
+import { useRouter } from "next/router";
 
 type iPatient = {
   // Set the type for the patient object from the server
@@ -39,7 +38,10 @@ type iPatient = {
   }[];
 };
 
-export default function patient({ patient }: { patient: iPatient }) {
+export default function Patient({ patient }: { patient: iPatient }) {
+  const router = useRouter();
+  const { patient: patientId } = router.query;
+
   return (
     <div>
       <Card className="w-[95%] mx-auto my-7">
@@ -87,6 +89,11 @@ export default function patient({ patient }: { patient: iPatient }) {
                   <TableRow
                     key={encounter.encounterId}
                     className="cursor-pointer capitalize"
+                    onClick={() =>
+                      router.push(
+                        `/patients/${patientId}/${encounter.encounterId}`
+                      )
+                    }
                   >
                     <TableCell>#{encounter.encounterId}</TableCell>
                     <TableCell>{encounter.encounterName}</TableCell>

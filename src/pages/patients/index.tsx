@@ -20,6 +20,7 @@ import {
 import { faker } from "@faker-js/faker";
 import { calculateAge, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/router";
 type iPatient = {
   id: number;
   name: string;
@@ -33,6 +34,7 @@ type iPatient = {
 
 export default function PatientList({ patients }: { patients: iPatient[] }) {
   const [displayedPatients, setDisplayedPatients] = useState<iPatient[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     setDisplayedPatients(patients.slice(0, 10));
@@ -57,7 +59,11 @@ export default function PatientList({ patients }: { patients: iPatient[] }) {
         </TableHeader>
         <TableBody>
           {displayedPatients.map((patient) => (
-            <TableRow key={patient.id} className="cursor-pointer">
+            <TableRow
+              key={patient.id}
+              className="cursor-pointer"
+              onClick={() => router.push(`/patients/${patient.id}`)}
+            >
               <TableCell>#{patient.id}</TableCell>
               <TableCell>
                 <span className="block">{patient.name}</span>
@@ -97,7 +103,7 @@ export default function PatientList({ patients }: { patients: iPatient[] }) {
 // Generate 620 patients with faker js from getServersideProps and pass it to the component and id of random 5 characters number
 export const getServerSideProps = async () => {
   const patients = [];
-  for (let i = 0; i < 620; i++) {
+  for (let i = 0; i < (Math.floor(Math.random() * 800)); i++) {
     patients.push({
       id: faker.string.numeric(5),
       name: faker.person.fullName(),
