@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -8,68 +8,141 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { faker } from "@faker-js/faker";
-import { Badge } from "@/components/ui/badge";
 import {
   calculateAge,
   cn,
   formatCustomDate,
   formatDateWithSlash,
 } from "@/lib/utils";
-import { useRouter } from "next/router";
 
 import {
   Sheet,
-  SheetClose,
   SheetContent,
-  SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Dot } from "lucide-react";
+import { GetServerSideProps } from "next";
+import { Client } from "pg";
 
 type iPatient = {
   // Set the type for the patient object from the server
   id: string;
-  name: string;
   dob: string;
   sex: string;
-  email: string;
-  phone: string;
-  address: string;
+  zip3: string;
+  orders: {
+    orderType: string;
+    contactDate: string;
+    note: string;
+  }[];
+  diagnosis: {
+    name: string;
+    description: string;
+    source: string;
+    date: string;
+  }[];
 };
 
-const diagnoses = [
-  {
-    name: "Hypertension",
-    description: "High blood pressure",
-    severiety: "High",
-    extractedFrom: "CBC Report",
-    date: "June 13th, 2021",
-  },
-  {
-    name: "Type 2 Diabetes Mellitus",
-    description:
-      "Chronic condition characterized by elevated blood sugar levels.",
-    severiety: "Moderate",
-    extractedFrom: "CBC Report",
-    date: "March 13th, 2021",
-  },
-  {
-    name: "Major Depressive Disorder",
-    description:
-      "A mental health disorder characterized by persistently depressed mood or loss of interest in activities, causing significant impairment in daily life.",
-    severiety: "Mild",
-    extractedFrom: "CBC Report",
-    date: "December 18th, 2021",
-  },
-];
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const { patient: patient_num, encounter: encounter_num } = context.query;
+
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+  });
+  await client.connect();
+
+  const patient = (
+    await client.query(
+      `SELECT 
+          d.patient_num, 
+          d.birth_date_shifted, 
+          d.gender_identity, 
+          d.zip3,
+          (
+              SELECT json_agg(diagnosis)
+              FROM (
+                  SELECT 
+                      dx_name, 
+                      dx_type, 
+                      dx_source, 
+                      dx_date_shifted 
+                  FROM diagnosis 
+                  WHERE patient_num = d.patient_num 
+                  AND encounter_num = ${encounter_num}
+              ) AS diagnosis
+          ) AS patient_diagnosis,
+          (
+              SELECT json_agg(orders)
+              FROM (
+                  SELECT 
+                      order_type, 
+                      contact_date, 
+                      note_text 
+                  FROM order_results_deid 
+                  WHERE patient_num = d.patient_num 
+                  AND encounter_num = ${encounter_num}
+              ) AS orders
+          ) AS patient_orders
+      FROM demographics AS d
+      WHERE d.patient_num = ${patient_num};
+      `
+    )
+  ).rows[0];
+
+  let pat: iPatient = {
+    id: patient.patient_num,
+    dob: patient.birth_date_shifted,
+    sex: patient.gender_identity,
+    zip3: patient.zip3,
+    orders: patient.patient_orders.map(
+      (order: {
+        order_type: string;
+        contact_date: string;
+        note_text: string;
+      }) => ({
+        orderType: order.order_type,
+        contactDate: order.contact_date,
+        note: order.note_text,
+      })
+    ),
+    diagnosis: patient.patient_diagnosis.map(
+      (diagnosis: {
+        dx_name: string;
+        dx_type: string;
+        dx_source: string;
+        dx_date_shifted: string;
+      }) => ({
+        name: diagnosis.dx_name,
+        description: diagnosis.dx_type,
+        source: diagnosis.dx_source,
+        date: diagnosis.dx_date_shifted,
+      })
+    ),
+  };
+
+  await client.end();
+
+  if (!pat || !pat.id)
+    return {
+      redirect: {
+        destination: "/patients",
+        permanent: false,
+      },
+    };
+
+  return {
+    props: {
+      patient: JSON.parse(JSON.stringify(pat)),
+    },
+  };
+};
 
 export default function Encounter({ patient }: { patient: iPatient }) {
+  const [diagnosisList, setDiagnosisList] = useState(5);
+  const [ordersList, setOrdersList] = useState(5);
+
   return (
     <div>
       <Card className="w-[95%] mx-auto my-7">
@@ -80,31 +153,26 @@ export default function Encounter({ patient }: { patient: iPatient }) {
             </h2>
             <span className="absolute inset-x-0 -bottom-1 h-1 w-4 bg-blue-800"></span>
           </div>
-          <div className="grid grid-cols-7 mt-5">
-            <Block title="Name" value={patient.name} />
-            <Block
-              title="DOB"
-              value={
-                formatDateWithSlash(patient.dob) +
-                "(" +
-                calculateAge(patient.dob) +
-                ")"
-              }
-            />
+          <div className="grid grid-cols-5 mt-5">
+            <Block title="Patient ID" value={patient.id} />
             <Block title="Gender" value={patient.sex} className="capitalize" />
-            <Block title="MRN Number" value="MI123456789" />
-            <Block title="Email" value={patient.email} className="lowercase" />
-            <Block title="Phone Number" value={patient.phone} />
-            <Block title="Address" value={patient.address} />
+            <Block title="DOB" value={formatDateWithSlash(patient.dob)} />
+            <Block
+              title="Age"
+              value={calculateAge(patient.dob)}
+              className="capitalize"
+            />
+            <Block title="ZIP Code" value={patient.zip3} />
           </div>
         </CardContent>
       </Card>
-      <Tabs defaultValue="diagnosis" className="w-[95%] mx-auto">
+      <Tabs defaultValue="diagnosis" className="w-[95%] mx-auto mb-10">
         <TabsList className="w-full flex items-center justify-start px-1">
           <TabsTrigger value="diagnosis">Diagnosis</TabsTrigger>
           <TabsTrigger value="procedures">Procedures</TabsTrigger>
+          <TabsTrigger value="imagingReports">Imaging Reports</TabsTrigger>
           <TabsTrigger value="ordersNotes">Orders & Notes</TabsTrigger>
-          <TabsTrigger value="hoNotes">H&O Notes</TabsTrigger>
+          <TabsTrigger value="hoNotes">HNO Notes</TabsTrigger>
         </TabsList>
         <TabsContent value="diagnosis">
           <Card>
@@ -119,28 +187,38 @@ export default function Encounter({ patient }: { patient: iPatient }) {
                   <TableRow className="uppercase font-semibold text-left">
                     <TableHead>Diagnosis Name</TableHead>
                     <TableHead className="w-[315px]">Description</TableHead>
-                    <TableHead>Severeity</TableHead>
+                    {/* <TableHead>Severeity</TableHead> */}
                     <TableHead>Extracted From</TableHead>
                     <TableHead>Date of Diagnosis</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {diagnoses.map((diagnosis) => (
-                    <TableRow key={diagnosis.name}>
-                      <TableCell>{diagnosis.name}</TableCell>
-                      <TableCell className="truncate max-w-[315px]">
-                        {diagnosis.description}
-                      </TableCell>
-                      <TableCell>
-                        <Severity severity={diagnosis.severiety as any} />
-                      </TableCell>
-                      <TableCell>{diagnosis.extractedFrom}</TableCell>
-                      <TableCell>{diagnosis.date}</TableCell>
-                    </TableRow>
-                  ))}
+                  {patient?.diagnosis
+                    ?.slice(0, diagnosisList)
+                    .map((diagnosis) => (
+                      <TableRow key={diagnosis.name}>
+                        <TableCell>{diagnosis.name}</TableCell>
+                        <TableCell className="truncate max-w-[315px]">
+                          {diagnosis.description}
+                        </TableCell>
+                        <TableCell>{diagnosis.source}</TableCell>
+                        <TableCell>
+                          {formatCustomDate(diagnosis.date).split(",")[0]}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
-              <ShowMore />
+              <ShowMore
+                isActive={diagnosisList === patient?.diagnosis?.length}
+                controlHandler={() => {
+                  if (diagnosisList === patient?.diagnosis?.length) {
+                    setDiagnosisList(5);
+                  } else {
+                    setDiagnosisList(patient?.diagnosis?.length);
+                  }
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -154,6 +232,16 @@ export default function Encounter({ patient }: { patient: iPatient }) {
             <CardContent className="space-y-2"></CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="imagingReports">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Title title={"Imaging Reports"} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2"></CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="ordersNotes">
           <Card>
             <CardHeader>
@@ -162,14 +250,24 @@ export default function Encounter({ patient }: { patient: iPatient }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <OrderNote title="Discharge Summary" date="June 13th, 2021" />
-              <OrderNote title="Radiology Report" date="January 18th, 2023" />
-              <OrderNote
-                title="Electrocardiograph(ECG)"
-                date="December 18th, 2022"
+              {patient?.orders?.slice(0, ordersList).map((order, i) => (
+                <OrderNote
+                  key={i}
+                  title={order.orderType}
+                  date={formatCustomDate(order.contactDate).split(",")[0]}
+                  note={order.note}
+                />
+              ))}
+              <ShowMore
+                isActive={ordersList === patient?.orders?.length}
+                controlHandler={() => {
+                  if (ordersList === patient?.orders?.length) {
+                    setOrdersList(5);
+                  } else {
+                    setOrdersList(patient?.orders?.length);
+                  }
+                }}
               />
-              <OrderNote title="Physician Note" date="May 18th, 2022" />
-              <ShowMore />
             </CardContent>
           </Card>
         </TabsContent>
@@ -203,41 +301,20 @@ const Block = ({
   </div>
 );
 
-const ShowMore = () => {
+export const ShowMore = ({
+  isActive,
+  controlHandler,
+}: {
+  isActive: boolean;
+  controlHandler: () => void;
+}) => {
   return (
-    <span className="text-blue-600 text-sm cursor-pointer block p-4 pb-0">
-      View All
-    </span>
-  );
-};
-
-const Severity = ({ severity }: { severity: "High" | "Moderate" | "Mild" }) => {
-  const bgColors = {
-    High: "bg-red-50",
-    Moderate: "bg-yellow-50",
-    Mild: "bg-blue-50",
-  };
-
-  const colors = {
-    High: "text-red-500",
-    Moderate: "text-yellow-500",
-    Mild: "text-blue-500",
-  };
-  return (
-    <Badge
-      variant="secondary"
-      className={cn(
-        "text-xs font-semibold uppercase relative pl-5",
-        bgColors[severity],
-        colors[severity]
-      )}
+    <div
+      className={cn("text-blue-600 text-sm cursor-pointer block p-4 pb-0")}
+      onClick={controlHandler}
     >
-      <Dot
-        className="inline-block absolute -left-3 top-1/2 transform -translate-y-1/2"
-        size={35}
-      />
-      {severity}
-    </Badge>
+      View {isActive ? "Less" : "All"}
+    </div>
   );
 };
 
@@ -250,7 +327,15 @@ const Title = ({ title }: { title: string }) => (
   </div>
 );
 
-const OrderNote = ({ title, date }: { title: string; date: string }) => {
+const OrderNote = ({
+  title,
+  date,
+  note,
+}: {
+  title: string;
+  date: string;
+  note: string;
+}) => {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -260,32 +345,10 @@ const OrderNote = ({ title, date }: { title: string; date: string }) => {
       </SheetTrigger>
       <SheetContent className="min-w-[500px]">
         <SheetHeader className="relative -top-3">
-          <SheetTitle>View Note</SheetTitle>
+          <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
-        <div className="grid gap-4 py-4 ">
-          <div className="grid grid-cols-4 items-center gap-4"></div>
-        </div>
+        <div>{note}</div>
       </SheetContent>
     </Sheet>
   );
-};
-
-export const getServerSideProps = async () => {
-  let patient: iPatient = {
-    id: faker.string.numeric(5),
-    name: faker.person.fullName(),
-    dob: faker.date.birthdate().toString(),
-    sex: faker.person.sex(),
-    email: faker.internet.email({
-      provider: "gmail",
-      allowSpecialCharacters: false,
-    }),
-    phone: faker.string.numeric(10),
-    address: faker.location.streetAddress(),
-  };
-  return {
-    props: {
-      patient,
-    },
-  };
 };

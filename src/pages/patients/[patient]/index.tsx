@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -8,7 +8,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { faker } from "@faker-js/faker";
 import { Badge } from "@/components/ui/badge";
 import {
   calculateAge,
@@ -16,16 +15,14 @@ import {
   formatDateWithSlash,
 } from "@/lib/utils";
 import { useRouter } from "next/router";
+import { Client } from "pg";
+import { ShowMore } from "./[encounter]";
 
 type iPatient = {
-  // Set the type for the patient object from the server
   id: string;
-  name: string;
   dob: string;
   sex: string;
-  email: string;
-  phone: string;
-  address: string;
+  zip3: string;
   enounters: {
     encounterId: string;
     encounterDate: string;
@@ -38,9 +35,78 @@ type iPatient = {
   }[];
 };
 
+export const getServerSideProps = async (context: {
+  query: { patient: string };
+}) => {
+  // Get the patient id from the url
+  const { patient: patient_num } = context.query;
+
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+  });
+  await client.connect();
+
+  const result = await client.query(
+    `SELECT 
+    d.patient_num, 
+    d.birth_date_shifted, 
+    d.gender_identity, 
+    d.zip3,
+        (
+            SELECT json_agg(encounters)
+            FROM (
+                SELECT 
+                    encounter_num, 
+                    visit_date_shifted, 
+                    src_enc_type_c, 
+                    visit_provider_name, 
+                    department_name 
+                FROM encounters 
+                WHERE patient_num = d.patient_num
+            ) AS encounters
+        ) AS patient_encounters
+    FROM demographics AS d
+    WHERE d.patient_num = ${patient_num};
+    `
+  );
+  const patient = result.rows[0];
+
+  let pat: iPatient = {
+    id: patient.patient_num,
+    dob: patient.birth_date_shifted,
+    sex: patient.gender_identity,
+    zip3: patient.zip3,
+    enounters: patient.patient_encounters.map(
+      (encounter: {
+        encounter_num: string;
+        visit_date_shifted: string;
+        src_enc_type_c: string;
+        visit_provider_name: string;
+        department_name: string;
+      }) => ({
+        encounterId: encounter.encounter_num,
+        encounterDate: encounter.visit_date_shifted,
+        encounterName: encounter.src_enc_type_c,
+        visitProvider: {
+          name: encounter.visit_provider_name,
+          department: encounter.department_name,
+        },
+        notes: Math.floor(Math.random() * 200),
+      })
+    ),
+  };
+  return {
+    props: {
+      patient: JSON.parse(JSON.stringify(pat)),
+    },
+  };
+};
+
 export default function Patient({ patient }: { patient: iPatient }) {
   const router = useRouter();
   const { patient: patientId } = router.query;
+
+  const [maxDisplay, setMaxDisplay] = useState(5);
 
   return (
     <div>
@@ -49,22 +115,16 @@ export default function Patient({ patient }: { patient: iPatient }) {
           <h2 className="font-semibold uppercase text-base text-center text-blue-600">
             Patient Demographics
           </h2>
-          <div className="grid grid-cols-7 mt-5">
-            <Block title="Name" value={patient.name} />
-            <Block
-              title="DOB"
-              value={
-                formatDateWithSlash(patient.dob) +
-                "(" +
-                calculateAge(patient.dob) +
-                ")"
-              }
-            />
+          <div className="grid grid-cols-5 mt-5">
+            <Block title="Patient ID" value={patient.id} />
             <Block title="Gender" value={patient.sex} className="capitalize" />
-            <Block title="MRN Number" value="MI123456789" />
-            <Block title="Email" value={patient.email} className="lowercase" />
-            <Block title="Phone Number" value={patient.phone} />
-            <Block title="Address" value={patient.address} />
+            <Block title="DOB" value={formatDateWithSlash(patient.dob)} />
+            <Block
+              title="Age"
+              value={calculateAge(patient.dob)}
+              className="capitalize"
+            />
+            <Block title="ZIP Code" value={patient.zip3} />
           </div>
         </CardContent>
       </Card>
@@ -85,7 +145,7 @@ export default function Patient({ patient }: { patient: iPatient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {patient.enounters.slice(0, 5).map((encounter) => (
+                {patient.enounters.slice(0, maxDisplay).map((encounter) => (
                   <TableRow
                     key={encounter.encounterId}
                     className="cursor-pointer capitalize"
@@ -115,6 +175,18 @@ export default function Patient({ patient }: { patient: iPatient }) {
                     </TableCell>
                   </TableRow>
                 ))}
+                <ShowMore
+                  isActive={maxDisplay === patient.enounters.length}
+                  controlHandler={() =>
+                    setMaxDisplay((maxDisplay) => {
+                      if (maxDisplay === patient.enounters.length) {
+                        return 5;
+                      } else {
+                        return patient.enounters.length;
+                      }
+                    })
+                  }
+                />
               </TableBody>
             </Table>
           </div>
@@ -138,39 +210,3 @@ const Block = ({
     <span className="text-base font-semibold">{value}</span>
   </div>
 );
-
-export const getServerSideProps = async () => {
-  let patient: iPatient = {
-    id: faker.string.numeric(5),
-    name: faker.person.fullName(),
-    dob: faker.date.birthdate().toString(),
-    sex: faker.person.sex(),
-    email: faker.internet.email({
-      provider: "gmail",
-      allowSpecialCharacters: false,
-    }),
-    phone: faker.phone.number("(+###) ###-####"),
-    address: faker.location.streetAddress(),
-    enounters: [],
-  };
-  for (let i = 0; i < 7; i++) {
-    patient.enounters.push({
-      encounterId: faker.string.numeric(5),
-      encounterDate: faker.date.past().toString(),
-      encounterName: faker.lorem.words({
-        min: 2,
-        max: 3,
-      }),
-      visitProvider: {
-        name: faker.person.fullName(),
-        department: faker.lorem.words(1),
-      },
-      notes: Math.floor(Math.random() * 200),
-    });
-  }
-  return {
-    props: {
-      patient,
-    },
-  };
-};
