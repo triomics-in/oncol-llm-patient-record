@@ -1,4 +1,4 @@
-## Generate a Schema For the ORM
+## Start the project locally
 
 1. Install the packages using npm or yarn running the following command in your terminal
 ```sh
