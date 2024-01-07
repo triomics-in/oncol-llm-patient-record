@@ -29,7 +29,7 @@ export const getServerSideProps = async () => {
 
   const result = (
     await client.query(
-      `SELECT d.patient_num, d.birth_date_shifted, d.gender_identity, d.zip3, COALESCE(encounter_count, 0) AS encounter_count
+      `SELECT d.patient_num, d.birth_date_shifted, d.gender_identity, d.state_c, d.zip3, COALESCE(encounter_count, 0) AS encounter_count
     FROM demographics d
     LEFT JOIN (
         SELECT patient_num, COUNT(*) AS encounter_count
@@ -43,7 +43,7 @@ export const getServerSideProps = async () => {
     id: patient.patient_num,
     dob: patient.birth_date_shifted,
     sex: patient.gender_identity,
-    zip3: patient.zip3,
+    zip3: patient.state_c + patient.zip3,
     encounters: patient.encounter_count,
     notes: Math.floor(Math.random() * 200),
   }));

@@ -32,6 +32,9 @@ type iPatient = {
   dob: string;
   sex: string;
   zip3: string;
+  race: string;
+  ethnicity: string;
+  pcp: string;
   orders: {
     orderType: string;
     contactDate: string;
@@ -60,6 +63,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           d.birth_date_shifted, 
           d.gender_identity, 
           d.zip3,
+          d.race,
+          d.ethnicity,
+          d.state_c,
           (
               SELECT json_agg(diagnosis)
               FROM (
@@ -96,30 +102,35 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     dob: patient.birth_date_shifted,
     sex: patient.gender_identity,
     zip3: patient.zip3,
-    orders: patient.patient_orders.map(
-      (order: {
-        order_type: string;
-        contact_date: string;
-        note_text: string;
-      }) => ({
-        orderType: order.order_type,
-        contactDate: order.contact_date,
-        note: order.note_text,
-      })
-    ),
-    diagnosis: patient.patient_diagnosis.map(
-      (diagnosis: {
-        dx_name: string;
-        dx_type: string;
-        dx_source: string;
-        dx_date_shifted: string;
-      }) => ({
-        name: diagnosis.dx_name,
-        description: diagnosis.dx_type,
-        source: diagnosis.dx_source,
-        date: diagnosis.dx_date_shifted,
-      })
-    ),
+    race: patient.race,
+    ethnicity: patient.ethnicity,
+    pcp: patient.primary_care_provider_name,
+    orders:
+      patient?.patient_orders?.map(
+        (order: {
+          order_type: string;
+          contact_date: string;
+          note_text: string;
+        }) => ({
+          orderType: order.order_type,
+          contactDate: order.contact_date,
+          note: order.note_text,
+        })
+      ) || [],
+    diagnosis:
+      patient?.patient_diagnosis?.map(
+        (diagnosis: {
+          dx_name: string;
+          dx_type: string;
+          dx_source: string;
+          dx_date_shifted: string;
+        }) => ({
+          name: diagnosis.dx_name,
+          description: diagnosis.dx_type,
+          source: diagnosis.dx_source,
+          date: diagnosis.dx_date_shifted,
+        })
+      ) || [],
   };
 
   await client.end();
@@ -153,7 +164,7 @@ export default function Encounter({ patient }: { patient: iPatient }) {
             </h2>
             <span className="absolute inset-x-0 -bottom-1 h-1 w-4 bg-blue-800"></span>
           </div>
-          <div className="grid grid-cols-5 mt-5">
+          <div className="grid grid-cols-8 mt-5">
             <Block title="Patient ID" value={patient.id} />
             <Block title="Gender" value={patient.sex} className="capitalize" />
             <Block title="DOB" value={formatDateWithSlash(patient.dob)} />
@@ -162,6 +173,9 @@ export default function Encounter({ patient }: { patient: iPatient }) {
               value={calculateAge(patient.dob)}
               className="capitalize"
             />
+            <Block title="Race" value={patient.race} />
+            <Block title="Ethnicity" value={patient.ethnicity} />
+            <Block title="PCP" value={patient.pcp} />
             <Block title="ZIP Code" value={patient.zip3} />
           </div>
         </CardContent>
