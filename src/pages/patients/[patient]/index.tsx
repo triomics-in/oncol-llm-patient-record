@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -66,7 +66,7 @@ export const getServerSideProps = async (context: {
                 SELECT 
                     encounter_num, 
                     visit_date_shifted, 
-                    src_enc_type_name, 
+                    src_enc_type_c, 
                     visit_provider_name, 
                     department_name,
                     department_external_name 
@@ -93,14 +93,14 @@ export const getServerSideProps = async (context: {
         (encounter: {
           encounter_num: string;
           visit_date_shifted: string;
-          src_enc_type_name: string;
+          src_enc_type_c: string;
           visit_provider_name: string;
           department_name: string;
           department_external_name: string;
         }) => ({
           encounterId: encounter.encounter_num,
           encounterDate: encounter.visit_date_shifted,
-          encounterName: encounter.src_enc_type_name,
+          encounterName: encounter.src_enc_type_c,
           department_external_name: encounter.department_external_name,
           visitProvider: {
             name: encounter.visit_provider_name,
@@ -123,6 +123,10 @@ export default function Patient({ patient }: { patient: iPatient }) {
   const [encounters, setEncounters] = useState(patient.enounters || []);
 
   const [maxDisplay, setMaxDisplay] = useState(5);
+
+  useEffect(() => {
+    setEncounters(patient.enounters || []);
+  }, [patient]);
 
   return (
     <div>
