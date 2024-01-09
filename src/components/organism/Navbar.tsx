@@ -2,11 +2,13 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/router";
-import React, { useEffect } from "react";
+import React from "react";
+import { signOut, useSession } from "next-auth/react";
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { status } = useSession();
 
   const { patient: patientId } = router.query;
 
@@ -47,6 +49,14 @@ export default function Navbar() {
             </li>
           )}
         </ol>
+        {status === "authenticated" && (
+          <button
+            onClick={() => signOut()}
+            className="ml-auto inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-gray-800 dark:hover:bg-gray-700"
+          >
+            Sign out
+          </button>
+        )}
       </nav>
       <h2 className="text-blue-600 font-bold ml-[2.5%] border-b-2 border-blue-600 pb-2 w-fit mt-3 text-base">
         {/^\/patients\/\d+(\/\d+)?$/.test(pathname) &&

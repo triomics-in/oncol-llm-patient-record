@@ -17,6 +17,8 @@ import {
 import { useRouter } from "next/router";
 import { Client } from "pg";
 import { ShowMore, Title } from "./[encounter]";
+import { getSession } from "next-auth/react";
+import { GetServerSidePropsContext } from "next";
 
 type iPatient = {
   id: string;
@@ -39,9 +41,21 @@ type iPatient = {
   }[];
 };
 
-export const getServerSideProps = async (context: {
-  query: { patient: string };
-}) => {
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const session = await getSession(context);
+
+  // redirect if not authenticated
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
+
   // Get the patient id from the url
   const { patient: patient_num } = context.query;
 
@@ -216,7 +230,7 @@ export default function Patient({ patient }: { patient: iPatient }) {
                     )
                   }
                 >
-                  <TableCell>#{encounter.encounterId}</TableCell>
+                  <TableCell>{encounter.encounterId}</TableCell>
                   <TableCell>{encounter.encounterName}</TableCell>
                   <TableCell>{encounter.department_external_name}</TableCell>
                   <TableCell>

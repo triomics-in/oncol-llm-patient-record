@@ -23,8 +23,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { GetServerSideProps } from "next";
+import { GetServerSideProps, GetServerSidePropsContext } from "next";
 import { Client } from "pg";
+import { getSession } from "next-auth/react";
 
 type iPatient = {
   // Set the type for the patient object from the server
@@ -71,7 +72,21 @@ type iPatient = {
   }[];
 };
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getServerSideProps: GetServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const session = await getSession(context);
+
+  // redirect if not authenticated
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
+
   const { patient: patient_num, encounter: encounter_num } = context.query;
 
   const client = new Client({
@@ -101,6 +116,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                   FROM diagnosis 
                   WHERE patient_num = d.patient_num 
                   AND encounter_num = ${encounter_num}
+                  ORDER BY dx_date_shifted DESC
               ) AS diagnosis
           ) AS patient_diagnosis,
           (
@@ -130,6 +146,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                   FROM imaging_reports_deid 
                   WHERE patient_num = d.patient_num 
                   AND encounter_num = ${encounter_num}
+                  ORDER BY impression_contact_date DESC
               ) AS imaging_reports_deid
           ) AS patient_imaging_reports_deid,
           (
@@ -144,6 +161,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                   FROM hno_notes_deid 
                   WHERE patient_num = d.patient_num 
                   AND encounter_num = ${encounter_num}
+                  ORDER BY contact_date DESC
               ) AS hno_notes_deid
           ) AS patient_hno_notes_deid,
           (
@@ -158,6 +176,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                   FROM order_results_deid 
                   WHERE patient_num = d.patient_num 
                   AND encounter_num = ${encounter_num}
+                  ORDER BY contact_date DESC
               ) AS orders
           ) AS patient_orders
       FROM demographics AS d
@@ -269,7 +288,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 };
 
 export default function Encounter({ patient }: { patient: iPatient }) {
-  console.log(patient);
   const [diagnosisList, setDiagnosisList] = useState(5);
   const [ordersList, setOrdersList] = useState(5);
   const [hoNotesList, setHoNotesList] = useState(5);

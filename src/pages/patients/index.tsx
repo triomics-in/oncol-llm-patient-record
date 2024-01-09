@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/router";
 import { Client } from "pg";
 import ReactPaginate from "react-paginate";
+import { GetServerSidePropsContext } from "next";
+import { getSession } from "next-auth/react";
 type iPatient = {
   id: number;
   sex: string;
@@ -21,7 +23,19 @@ type iPatient = {
   notes: number;
 };
 
-export const getServerSideProps = async () => {
+export const getServerSideProps = async (context: GetServerSidePropsContext) => {
+  const session = await getSession(context);
+
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
+
+
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
   });
