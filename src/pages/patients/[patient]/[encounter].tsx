@@ -170,7 +170,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     id: patient.patient_num,
     dob: patient.birth_date_shifted,
     sex: patient.sex,
-    zip3: patient.zip3,
+    zip3: patient.state_c + patient.zip3,
     race: patient.race,
     ethnicity: patient.ethnicity,
     pcp: patient.primary_care_provider_name,
@@ -332,8 +332,8 @@ export default function Encounter({ patient }: { patient: iPatient }) {
                 <TableHeader>
                   <TableRow className="uppercase font-semibold text-left">
                     <TableHead>Diagnosis Name</TableHead>
-                    <TableHead className="w-[315px]">Description</TableHead>
-                    <TableHead>Extracted From</TableHead>
+                    <TableHead className="w-[315px]">Diagnosis Type</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead>Date of Diagnosis</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -637,11 +637,14 @@ const ViewNote = ({ note }: { note: string | TrustedHTML }) => {
           <span className="text-blue-700 underline">View Note</span>
         </div>
       </SheetTrigger>
-      <SheetContent className="min-w-[500px]">
+      <SheetContent className="min-w-[500px] flex flex-col">
         <SheetHeader className="relative -top-3">
           <SheetTitle>Note</SheetTitle>
         </SheetHeader>
-        <div dangerouslySetInnerHTML={{ __html: note }}></div>
+        <div
+          className="overflow-y-auto"
+          dangerouslySetInnerHTML={{ __html: note }}
+        ></div>
       </SheetContent>
     </Sheet>
   );
