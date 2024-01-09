@@ -100,7 +100,7 @@ export default function PatientList({ patients }: { patients: iPatient[] }) {
               className="cursor-pointer"
               onClick={() => router.push(`/patients/${patient.id}`)}
             >
-              <TableCell>#{patient.id}</TableCell>
+              <TableCell>{patient.id}</TableCell>
               <TableCell>{formatDate(patient.dob)}</TableCell>
               <TableCell>{calculateAge(patient.dob)}</TableCell>
               <TableCell className="capitalize">{patient.sex}</TableCell>

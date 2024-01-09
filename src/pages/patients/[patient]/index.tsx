@@ -16,7 +16,7 @@ import {
 } from "@/lib/utils";
 import { useRouter } from "next/router";
 import { Client } from "pg";
-import { ShowMore } from "./[encounter]";
+import { ShowMore, Title } from "./[encounter]";
 
 type iPatient = {
   id: string;
@@ -52,30 +52,65 @@ export const getServerSideProps = async (context: {
 
   const result = await client.query(
     `SELECT 
-    d.patient_num, 
-    d.birth_date_shifted, 
-    d.gender_identity, 
-    d.zip3,
-    d.race,
-    d.ethnicity,
-    d.state_c,
-    d.primary_care_provider_name,
-        (
-            SELECT json_agg(encounters)
-            FROM (
-                SELECT 
-                    encounter_num, 
-                    visit_date_shifted, 
-                    src_enc_type_c, 
-                    visit_provider_name, 
-                    department_name,
-                    department_external_name 
-                FROM encounters 
-                WHERE patient_num = d.patient_num
-            ) AS encounters
-        ) AS patient_encounters
+      d.patient_num, 
+      d.birth_date_shifted, 
+      d.sex, 
+      d.zip3,
+      d.race,
+      d.ethnicity,
+      d.state_c,
+      d.primary_care_provider_name,
+      json_agg(json_build_object(
+          'encounter_num', e.encounter_num,
+          'visit_date_shifted', e.visit_date_shifted,
+          'src_enc_type_name', e.src_enc_type_name,
+          'visit_provider_name', e.visit_provider_name,
+          'department_name', e.department_name,
+          'department_external_name', e.department_external_name,
+          'note_text_count', COALESCE(note_counts.order_results_count, 0)
+                               + COALESCE(note_counts.imaging_reports_count, 0)
+                               + COALESCE(note_counts.hno_notes_count, 0)
+      )) AS patient_encounters
     FROM demographics AS d
-    WHERE d.patient_num = ${patient_num};
+    LEFT JOIN encounters AS e ON e.patient_num = d.patient_num
+    LEFT JOIN (
+        SELECT encounter_num, patient_num,
+               SUM(order_results_count) AS order_results_count,
+               SUM(imaging_reports_count) AS imaging_reports_count,
+               SUM(hno_notes_count) AS hno_notes_count
+        FROM (
+            SELECT encounter_num, patient_num,
+                   COUNT(*) AS order_results_count,
+                   0 AS imaging_reports_count,
+                   0 AS hno_notes_count
+            FROM order_results_deid
+            WHERE note_text IS NOT NULL
+            GROUP BY encounter_num, patient_num
+            
+            UNION ALL
+            
+            SELECT encounter_num, patient_num,
+                   0 AS order_results_count,
+                   COUNT(*) AS imaging_reports_count,
+                   0 AS hno_notes_count
+            FROM imaging_reports_deid
+            WHERE note_text IS NOT NULL
+            GROUP BY encounter_num, patient_num
+            
+            UNION ALL
+            
+            SELECT encounter_num, patient_num,
+                   0 AS order_results_count,
+                   0 AS imaging_reports_count,
+                   COUNT(*) AS hno_notes_count
+            FROM hno_notes_deid
+            WHERE note_text IS NOT NULL
+            GROUP BY encounter_num, patient_num
+        ) AS subquery
+        GROUP BY encounter_num, patient_num
+    ) AS note_counts ON note_counts.encounter_num = e.encounter_num AND note_counts.patient_num = e.patient_num
+    WHERE d.patient_num = ${patient_num}
+    GROUP BY d.patient_num, d.birth_date_shifted, d.sex, d.zip3, d.race, d.ethnicity, d.state_c, d.primary_care_provider_name;
     `
   );
   const patient = result.rows[0];
@@ -83,7 +118,7 @@ export const getServerSideProps = async (context: {
   let pat: iPatient = {
     id: patient.patient_num,
     dob: patient.birth_date_shifted,
-    sex: patient.gender_identity,
+    sex: patient.sex,
     zip3: patient.state_c + patient.zip3,
     race: patient.race,
     ethnicity: patient.ethnicity,
@@ -93,20 +128,21 @@ export const getServerSideProps = async (context: {
         (encounter: {
           encounter_num: string;
           visit_date_shifted: string;
-          src_enc_type_c: string;
+          src_enc_type_name: string;
           visit_provider_name: string;
           department_name: string;
           department_external_name: string;
+          note_text_count: number;
         }) => ({
           encounterId: encounter.encounter_num,
           encounterDate: encounter.visit_date_shifted,
-          encounterName: encounter.src_enc_type_c,
+          encounterName: encounter.src_enc_type_name,
           department_external_name: encounter.department_external_name,
           visitProvider: {
             name: encounter.visit_provider_name,
             department: encounter.department_name,
           },
-          notes: Math.floor(Math.random() * 200),
+          notes: encounter.note_text_count,
         })
       ) || [],
   };
@@ -132,10 +168,13 @@ export default function Patient({ patient }: { patient: iPatient }) {
     <div>
       <Card className="w-[95%] mx-auto my-7">
         <CardContent className="p-6">
-          <h2 className="font-semibold uppercase text-base text-center text-blue-600">
-            Patient Demographics
-          </h2>
-          <div className="grid grid-cols-8 mt-5">
+          <div className="relative w-fit mx-auto">
+            <h2 className="block font-semibold uppercase text-base text-blue-800">
+              Patient Demographics
+            </h2>
+            <span className="absolute inset-x-0 -bottom-1 h-1 w-4 bg-blue-800"></span>
+          </div>
+          <div className="grid grid-cols-4 gap-5 mt-5">
             <Block title="Patient ID" value={patient.id} />
             <Block title="Gender" value={patient.sex} className="capitalize" />
             <Block title="DOB" value={formatDateWithSlash(patient.dob)} />
@@ -153,9 +192,7 @@ export default function Patient({ patient }: { patient: iPatient }) {
       </Card>
       <Card className="w-[95%] mx-auto my-7">
         <CardContent className="p-6">
-          <h2 className="font-semibold uppercase text-base text-left text-blue-600">
-            Enounters
-          </h2>
+          <Title title="Encounters" />
 
           <Table>
             <TableHeader>
@@ -198,18 +235,20 @@ export default function Patient({ patient }: { patient: iPatient }) {
                   </TableCell>
                 </TableRow>
               ))}
-              <ShowMore
-                isActive={maxDisplay === encounters.length}
-                controlHandler={() =>
-                  setMaxDisplay((maxDisplay) => {
-                    if (maxDisplay === encounters.length) {
-                      return 5;
-                    } else {
-                      return encounters.length;
-                    }
-                  })
-                }
-              />
+              {encounters.length > 5 && (
+                <ShowMore
+                  isActive={maxDisplay === encounters.length}
+                  controlHandler={() =>
+                    setMaxDisplay((maxDisplay) => {
+                      if (maxDisplay === encounters.length) {
+                        return 5;
+                      } else {
+                        return encounters.length;
+                      }
+                    })
+                  }
+                />
+              )}
             </TableBody>
           </Table>
         </CardContent>
