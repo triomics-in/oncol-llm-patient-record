@@ -23,19 +23,7 @@ type iPatient = {
   notes: number;
 };
 
-export const getServerSideProps = async (context: GetServerSidePropsContext) => {
-  const session = await getSession(context);
-
-  if (!session) {
-    return {
-      redirect: {
-        destination: "/",
-        permanent: false,
-      },
-    };
-  }
-
-
+export const getServerSideProps = async () => {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
   });

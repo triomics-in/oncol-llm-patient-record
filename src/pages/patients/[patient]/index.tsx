@@ -44,18 +44,6 @@ type iPatient = {
 export const getServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
-  const session = await getSession(context);
-
-  // redirect if not authenticated
-  if (!session) {
-    return {
-      redirect: {
-        destination: "/",
-        permanent: false,
-      },
-    };
-  }
-
   // Get the patient id from the url
   const { patient: patient_num } = context.query;
 
